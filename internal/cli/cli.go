@@ -6,10 +6,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Services - структура для хранения всех сервисов, которые будут использоваться в CLI
 type Services struct {
 	linkUseCase *service.LinkUseCase
 }
 
+// CLI - структура для хранения всех данных, необходимых для работы CLI
 type CLI struct {
 	Services
 
@@ -17,6 +19,7 @@ type CLI struct {
 	cfg  *config.Config
 }
 
+// New - конструктор для CLI, который инициализирует все сервисы и команды
 func New(cfg *config.Config) *CLI {
 	c := &CLI{cfg: cfg}
 
@@ -33,6 +36,7 @@ func New(cfg *config.Config) *CLI {
 	return c
 }
 
+// Run - метод для запуска CLI, который выполняет корневую команду и обрабатывает ошибки
 func (c *CLI) Run() error {
 	return c.root.Execute()
 }

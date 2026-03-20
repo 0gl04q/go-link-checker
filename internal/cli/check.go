@@ -2,11 +2,11 @@ package cli
 
 import "github.com/spf13/cobra"
 
+// checkCmd - команда для проверки доступности ссылок, указанных в файле, и сохранения результатов в Redis
 func (c *CLI) checkCmd() *cobra.Command {
 	var (
-		filePath   string
-		dryRun     bool
-		syncMethod bool
+		filePath       string
+		workerPoolSize int
 	)
 
 	cmd := &cobra.Command{
@@ -14,13 +14,12 @@ func (c *CLI) checkCmd() *cobra.Command {
 		Short: "Проверить доступность ссылок",
 		Long:  "Проверить доступность ссылок, указанных в конфигурации, и сохранить результаты в Redis",
 		Run: func(cmd *cobra.Command, args []string) {
-			c.linkUseCase.CheckLinks(filePath, dryRun, syncMethod)
+			c.linkUseCase.Check(filePath, workerPoolSize)
 		},
 	}
 
-	cmd.Flags().StringVarP(&filePath, "file", "f", "", "Путь к файлу со ссылками (по умолчанию используется конфигурация)")
-	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Показать результаты проверки без сохранения в Redis")
-	cmd.Flags().BoolVarP(&syncMethod, "sync", "s", false, "Проверять ссылки синхронно (без многопоточности)")
+	cmd.Flags().StringVarP(&filePath, "file", "f", "links.example.txt", "Путь к файлу со ссылками")
+	cmd.Flags().IntVarP(&workerPoolSize, "worker-pool-size", "w", 100, "Размер пула воркеров для асинхронной проверки ссылок")
 
 	return cmd
 }

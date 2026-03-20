@@ -3,113 +3,49 @@ package service
 import (
 	"bufio"
 	"fmt"
-	"net/http"
-	urlpkg "net/url"
 	"os"
-	"sync"
+
+	"github.com/0gl04q/go-link-checker/internal/domain"
+	"github.com/0gl04q/go-link-checker/internal/handler"
+	"github.com/0gl04q/go-link-checker/internal/output"
+	"github.com/0gl04q/go-link-checker/pkg/consumer"
+	"github.com/0gl04q/go-link-checker/pkg/worker"
 )
 
-type result struct {
-	message string
-	err     error
-}
-
 // LinkUseCase - базовый юзкейс для проверки ссылок
-type LinkUseCase struct{}
+type LinkUseCase struct {
+	handler *handler.LinkHandler
+}
 
 // NewLinkUseCase - конструктор для LinkUseCase
 func NewLinkUseCase() *LinkUseCase {
-	return &LinkUseCase{}
+	return &LinkUseCase{
+		handler: handler.NewLinkHandler(),
+	}
 }
 
-// CheckLinks - проверяет доступность ссылок и выводит результат
-func (l *LinkUseCase) CheckLinks(filePath string, dryRun, syncMethod bool) {
+// Check - проверяет доступность ссылок и выводит результат
+func (l *LinkUseCase) Check(filePath string, workerPoolSize int) {
 	links, err := l.getLinksFromFile(filePath)
 	if err != nil {
 		fmt.Printf("ошибка при получении ссылок: %v\n", err)
 		return
 	}
 
-	switch syncMethod {
-	case true:
-		l.syncCheck(links)
-	case false:
-		l.asyncCheck(links)
-	}
-}
-
-// syncCheck - проверяет доступность ссылок синхронно и выводит результат
-func (l *LinkUseCase) syncCheck(links []string) {
-	for _, link := range links {
-		res, err := l.sendGetRequest(link)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			continue
-		}
-
-		if res.StatusCode >= 200 && res.StatusCode < 400 {
-			fmt.Printf("%s ссылка доступна, статус %s \n", link, res.Status)
-		} else {
-			fmt.Printf("%s ссылка не доступна, статус %s\n", link, res.Status)
-		}
-	}
-}
-
-// asyncCheck - проверяет доступность ссылок асинхронно и выводит результат
-func (l *LinkUseCase) asyncCheck(links []string) {
-	var wg sync.WaitGroup
-	ch := make(chan result, len(links))
-
-	wg.Add(len(links))
-
-	for _, link := range links {
-		go l.checkLink(&wg, ch, link)
-	}
+	pool := worker.NewPool[domain.Result](workerPoolSize)
+	results := pool.Start(l.handler.Handle)
 
 	go func() {
-		wg.Wait()
-		close(ch)
+		for _, link := range links {
+			pool.Jobs <- link
+		}
+		close(pool.Jobs)
 	}()
 
-	for res := range ch {
-		if res.err != nil {
-			fmt.Printf("%v\n", res.err)
-		} else {
-			fmt.Print(res.message)
-		}
-	}
-}
-
-// sendGetRequest - отправляет GET запрос по ссылке и возвращает результат
-func (l *LinkUseCase) sendGetRequest(link string) (*http.Response, error) {
-	_, err := urlpkg.ParseRequestURI(link)
-	if err != nil {
-		return nil, fmt.Errorf("%s ссылка не валидная\n", link)
-	}
-
-	r, err := http.Get(link)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Body.Close()
-
-	return r, nil
-}
-
-// checkLink - проверяет доступность ссылки и отправляет результат в канал
-func (l *LinkUseCase) checkLink(wg *sync.WaitGroup, ch chan<- result, link string) {
-	defer wg.Done()
-
-	r, err := l.sendGetRequest(link)
-	if err != nil {
-		ch <- result{"", err}
+	c := consumer.NewConsumer[domain.Result](output.NewConsoleOutput())
+	if err := c.Consume(results); err != nil {
+		fmt.Printf("ошибка при потреблении результатов: %v\n", err)
 		return
-	}
-
-	if r.StatusCode >= 200 && r.StatusCode < 400 {
-		ch <- result{fmt.Sprintf("%s ссылка доступна, статус %s \n", link, r.Status), nil}
-	} else {
-		ch <- result{fmt.Sprintf("%s ссылка не доступна, статус %s\n", link, r.Status), nil}
 	}
 }
 

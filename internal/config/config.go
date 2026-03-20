@@ -1,32 +1,26 @@
 package config
 
 import (
-	"time"
-
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
+// Config - структура для хранения конфигурации приложения
 type Config struct {
 	CLI   CLIConfig
 	Redis RedisConfig
-	DB    DBConfig
 }
 
+// CLIConfig - структура для хранения конфигурации командной строки (пока пустая, но может быть расширена в будущем)
 type CLIConfig struct{}
 
+// RedisConfig - структура для хранения конфигурации подключения к Redis
 type RedisConfig struct {
 	Addr     string `env:"REDIS_ADDR"     env-default:"localhost:6379"`
 	Password string `env:"REDIS_PASSWORD" env-default:""`
 	DB       int    `env:"REDIS_DB"       env-default:"0"`
 }
 
-type DBConfig struct {
-	DSN          string        `env:"DB_DSN" env-default:"postgres://user:password@localhost:5432/dbname?sslmode=disable"`
-	MaxOpenConns int           `env:"DB_MAX_OPEN_CONNS" env-default:"25"`
-	MaxIdleConns int           `env:"DB_MAX_IDLE_CONNS" env-default:"5"`
-	ConnTimeout  time.Duration `env:"DB_CONN_TIMEOUT"   env-default:"5s"`
-}
-
+// Load - функция для загрузки конфигурации из файла .env или из переменных окружения
 func Load() (*Config, error) {
 	cfg := &Config{}
 	if err := cleanenv.ReadConfig(".env", cfg); err != nil {
