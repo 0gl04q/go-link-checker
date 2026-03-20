@@ -15,11 +15,7 @@ func NewConsoleOutput() *ConsoleOutput {
 }
 
 // Write - выводит результат в консоль
-func (o *ConsoleOutput) Write(r domain.Result) error {
-	if r.Err != nil {
-		fmt.Printf("%v\n", r.Err)
-	} else {
-		fmt.Print(r.Message)
-	}
+func (o *ConsoleOutput) Write(r *domain.Result) error {
+	fmt.Println(r)
 	return nil
 }

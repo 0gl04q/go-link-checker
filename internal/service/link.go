@@ -2,8 +2,11 @@ package service
 
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/0gl04q/go-link-checker/internal/domain"
 	"github.com/0gl04q/go-link-checker/internal/handler"
@@ -26,6 +29,11 @@ func NewLinkUseCase() *LinkUseCase {
 
 // Check - проверяет доступность ссылок и выводит результат
 func (l *LinkUseCase) Check(filePath string, workerPoolSize int) {
+	l.handler.Client = l.buildClient(workerPoolSize)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	links, err := l.getLinksFromFile(filePath)
 	if err != nil {
 		fmt.Printf("ошибка при получении ссылок: %v\n", err)
@@ -33,7 +41,7 @@ func (l *LinkUseCase) Check(filePath string, workerPoolSize int) {
 	}
 
 	pool := worker.NewPool[domain.Result](workerPoolSize)
-	results := pool.Start(l.handler.Handle)
+	results := pool.Start(ctx, l.handler.Handle)
 
 	go func() {
 		for _, link := range links {
@@ -46,6 +54,18 @@ func (l *LinkUseCase) Check(filePath string, workerPoolSize int) {
 	if err := c.Consume(results); err != nil {
 		fmt.Printf("ошибка при потреблении результатов: %v\n", err)
 		return
+	}
+}
+
+// buildClient - создает HTTP клиент с оптимизированными параметрами для работы с большим количеством ссылок
+func (l *LinkUseCase) buildClient(workerPoolSize int) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        workerPoolSize,
+			MaxIdleConnsPerHost: workerPoolSize / 10,
+			IdleConnTimeout:     30 * time.Second,
+			DisableKeepAlives:   false,
+		},
 	}
 }
 

@@ -2,7 +2,7 @@ package consumer
 
 // Output - интерфейс для вывода результатов
 type Output[T any] interface {
-	Write(T) error
+	Write(*T) error
 }
 
 // Consumer - отвечает за потребление результатов из канала и передачу их в Output
@@ -18,7 +18,7 @@ func NewConsumer[T any](output Output[T]) *Consumer[T] {
 }
 
 // Consume - потребляет результаты из канала и передает их в Output
-func (c *Consumer[T]) Consume(results <-chan T) error {
+func (c *Consumer[T]) Consume(results <-chan *T) error {
 	for result := range results {
 		if err := c.output.Write(result); err != nil {
 			return err
