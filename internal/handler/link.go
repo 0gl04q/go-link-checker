@@ -23,31 +23,33 @@ func NewLinkHandler() *LinkHandler {
 }
 
 // Handle - воркер для проверки ссылок, получает ссылки из канала jobs и отправляет результат в канал results
-func (l *LinkHandler) Handle(ctx context.Context, jobs <-chan string, results chan<- *domain.Result) {
+func (l *LinkHandler) Handle(ctx context.Context, jobs <-chan string, results chan<- *domain.Link) {
 	for link := range jobs {
 		results <- l.processLink(ctx, link)
 	}
 }
 
 // processLink - обрабатывает ссылку и возвращает результат проверки
-func (l *LinkHandler) processLink(ctx context.Context, link string) *domain.Result {
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+func (l *LinkHandler) processLink(ctx context.Context, link string) *domain.Link {
+	timestamp := time.Now().Unix()
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	res, err := l.sendGetRequest(ctx, link)
 	if err != nil {
-		return domain.NewResult(link, 0, "", err)
+		return domain.NewLink(link, 0, "", timestamp, err)
 	}
 	if res == nil {
-		return domain.NewResult(link, 0, "", ErrEmptyResult)
+		return domain.NewLink(link, 0, "", timestamp, ErrEmptyResult)
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode >= 200 && res.StatusCode < 400 {
-		return domain.NewResult(link, res.StatusCode, "Ссылка доступна", nil)
+		return domain.NewLink(link, res.StatusCode, "Ссылка доступна", timestamp, nil)
 	}
 
-	return domain.NewResult(link, res.StatusCode, "Ссылка не доступна", nil)
+	return domain.NewLink(link, res.StatusCode, "Ссылка не доступна", timestamp, nil)
 }
 
 // sendGetRequest - отправляет GET запрос по ссылке и возвращает результат
@@ -62,5 +64,7 @@ func (l *LinkHandler) sendGetRequest(ctx context.Context, link string) (*http.Re
 		return nil, err
 	}
 
-	return http.DefaultClient.Do(r)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (compatible; LinkChecker/1.0)")
+
+	return l.Client.Do(r)
 }

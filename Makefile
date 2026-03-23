@@ -5,3 +5,8 @@ run:
 .PHONY: build
 build:
 	go build -o bin/worker ./cmd/cli/
+
+.PHONY: bench
+bench:
+	docker compose up -d
+	go test -bench=. -benchmem ./...

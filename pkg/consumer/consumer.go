@@ -1,8 +1,12 @@
 package consumer
 
+import (
+	"context"
+)
+
 // Output - интерфейс для вывода результатов
 type Output[T any] interface {
-	Write(*T) error
+	Write(ctx context.Context, result *T) error
 }
 
 // Consumer - отвечает за потребление результатов из канала и передачу их в Output
@@ -18,12 +22,14 @@ func NewConsumer[T any](output Output[T]) *Consumer[T] {
 }
 
 // Consume - потребляет результаты из канала и передает их в Output
-func (c *Consumer[T]) Consume(results <-chan *T) error {
+func (c *Consumer[T]) Consume(ctx context.Context, results <-chan *T) []error {
+	var errs []error
+
 	for result := range results {
-		if err := c.output.Write(result); err != nil {
-			return err
+		if err := c.output.Write(ctx, result); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errs
 }

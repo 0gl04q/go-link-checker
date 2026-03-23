@@ -2,6 +2,8 @@ package service
 
 import (
 	"testing"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func BenchmarkLinkUseCase_Check(b *testing.B) {
@@ -9,5 +11,5 @@ func BenchmarkLinkUseCase_Check(b *testing.B) {
 
 	b.ResetTimer()
 
-	linkUseCase.Check("../../links.example.txt", 1000)
+	linkUseCase.Check("../../links.example.txt", 100, "console")
 }

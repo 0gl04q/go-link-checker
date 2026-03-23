@@ -10,8 +10,8 @@ import (
 
 	"github.com/0gl04q/go-link-checker/internal/domain"
 	"github.com/0gl04q/go-link-checker/internal/handler"
-	"github.com/0gl04q/go-link-checker/internal/output"
 	"github.com/0gl04q/go-link-checker/pkg/consumer"
+	"github.com/0gl04q/go-link-checker/pkg/producer"
 	"github.com/0gl04q/go-link-checker/pkg/worker"
 )
 
@@ -28,44 +28,33 @@ func NewLinkUseCase() *LinkUseCase {
 }
 
 // Check - проверяет доступность ссылок и выводит результат
-func (l *LinkUseCase) Check(filePath string, workerPoolSize int) {
-	l.handler.Client = l.buildClient(workerPoolSize)
+func (l *LinkUseCase) Check(
+	filePath string,
+	httpClient *http.Client,
+	wp *worker.Pool[domain.Link],
+	prod *producer.Producer,
+	con *consumer.Consumer[domain.Link],
+) {
+	l.handler.Client = httpClient
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	links, err := l.getLinksFromFile(filePath)
+	urls, err := l.getLinksFromFile(filePath)
 	if err != nil {
 		fmt.Printf("ошибка при получении ссылок: %v\n", err)
 		return
 	}
 
-	pool := worker.NewPool[domain.Result](workerPoolSize)
-	results := pool.Start(ctx, l.handler.Handle)
+	results := wp.Start(ctx, l.handler.Handle)
 
-	go func() {
-		for _, link := range links {
-			pool.Jobs <- link
+	prod.Produce(ctx, urls, wp.Jobs)
+
+	if errs := con.Consume(ctx, results); errs != nil {
+		fmt.Printf("ошибок при потреблении: %d\n", len(errs))
+		for _, err := range errs {
+			fmt.Printf("  %v\n", err)
 		}
-		close(pool.Jobs)
-	}()
-
-	c := consumer.NewConsumer[domain.Result](output.NewConsoleOutput())
-	if err := c.Consume(results); err != nil {
-		fmt.Printf("ошибка при потреблении результатов: %v\n", err)
-		return
-	}
-}
-
-// buildClient - создает HTTP клиент с оптимизированными параметрами для работы с большим количеством ссылок
-func (l *LinkUseCase) buildClient(workerPoolSize int) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConns:        workerPoolSize,
-			MaxIdleConnsPerHost: workerPoolSize / 10,
-			IdleConnTimeout:     30 * time.Second,
-			DisableKeepAlives:   false,
-		},
 	}
 }
 

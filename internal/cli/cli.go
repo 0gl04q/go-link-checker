@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/0gl04q/go-link-checker/internal/config"
 	"github.com/0gl04q/go-link-checker/internal/service"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
 )
 
@@ -14,6 +15,8 @@ type Services struct {
 // CLI - структура для хранения всех данных, необходимых для работы CLI
 type CLI struct {
 	Services
+
+	redisClient *redis.Client
 
 	root *cobra.Command
 	cfg  *config.Config
@@ -30,6 +33,12 @@ func New(cfg *config.Config) *CLI {
 	}
 
 	c.linkUseCase = service.NewLinkUseCase()
+
+	c.redisClient = redis.NewClient(&redis.Options{
+		Addr:     cfg.Redis.Addr,
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
 
 	c.root.AddCommand(c.checkCmd())
 
