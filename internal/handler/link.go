@@ -8,18 +8,21 @@ import (
 	"time"
 
 	"github.com/0gl04q/go-link-checker/internal/domain"
+	"github.com/0gl04q/go-link-checker/internal/limiter"
 )
 
+// ErrEmptyResult - ошибка для случаев, когда результат проверки ссылки пустой
 var ErrEmptyResult = fmt.Errorf("пустой результат")
 
 // LinkHandler - базовый воркер для проверки ссылок
 type LinkHandler struct {
-	Client *http.Client
+	RateLimiter limiter.RateLimiter
+	Client      *http.Client
 }
 
 // NewLinkHandler - конструктор для LinkHandler
-func NewLinkHandler() *LinkHandler {
-	return &LinkHandler{}
+func NewLinkHandler(c *http.Client, l limiter.RateLimiter) *LinkHandler {
+	return &LinkHandler{Client: c, RateLimiter: l}
 }
 
 // Handle - воркер для проверки ссылок, получает ссылки из канала jobs и отправляет результат в канал results
@@ -53,13 +56,33 @@ func (l *LinkHandler) processLink(ctx context.Context, link string) *domain.Link
 }
 
 // sendGetRequest - отправляет GET запрос по ссылке и возвращает результат
-func (l *LinkHandler) sendGetRequest(ctx context.Context, link string) (*http.Response, error) {
-	_, err := urlpkg.ParseRequestURI(link)
+func (l *LinkHandler) sendGetRequest(ctx context.Context, url string) (*http.Response, error) {
+	u, err := urlpkg.ParseRequestURI(url)
 	if err != nil {
-		return nil, fmt.Errorf("%s ссылка не валидная\n", link)
+		return nil, fmt.Errorf("%s ссылка не валидная\n", url)
 	}
 
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		allowed, err := l.RateLimiter.Allow(ctx, u.Hostname())
+		if err != nil {
+			return nil, fmt.Errorf("ошибка при проверке rate limiter для хоста %s: %v\n", u.Hostname(), err)
+		}
+
+		if allowed {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("контекст истек при ожидании разрешения от rate limiter для хоста %s\n", u.Hostname())
+		case <-ticker.C:
+		}
+	}
+
+	r, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}

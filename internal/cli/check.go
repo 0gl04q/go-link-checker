@@ -6,6 +6,8 @@ import (
 
 	"github.com/0gl04q/go-link-checker/internal/deduplicator"
 	"github.com/0gl04q/go-link-checker/internal/domain"
+	"github.com/0gl04q/go-link-checker/internal/handler"
+	"github.com/0gl04q/go-link-checker/internal/limiter"
 	"github.com/0gl04q/go-link-checker/internal/output"
 	"github.com/0gl04q/go-link-checker/pkg/consumer"
 	"github.com/0gl04q/go-link-checker/pkg/producer"
@@ -44,11 +46,13 @@ func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *st
 	return func(cmd *cobra.Command, args []string) {
 		var out consumer.Output[domain.Link]
 		var dedup producer.Deduplicator
+		var rLimit limiter.RateLimiter
 
 		switch *outputType {
 		case redisOutputType:
 			out = output.NewRedisOutput(c.redisClient)
 			dedup = deduplicator.NewRedisDeduplicator(c.redisClient)
+			rLimit = limiter.NewRedisRateLimiter(c.redisClient)
 		default:
 			out = output.NewConsoleOutput()
 			dedup = deduplicator.NewMemoryDeduplicator()
@@ -65,7 +69,7 @@ func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *st
 
 		c.linkUseCase.Check(
 			*filePath,
-			httpClient,
+			handler.NewLinkHandler(httpClient, rLimit),
 			worker.NewPool[domain.Link](*workerPoolSize),
 			producer.NewProducer(dedup),
 			consumer.NewConsumer[domain.Link](out),

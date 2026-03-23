@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
@@ -22,20 +21,18 @@ type LinkUseCase struct {
 
 // NewLinkUseCase - конструктор для LinkUseCase
 func NewLinkUseCase() *LinkUseCase {
-	return &LinkUseCase{
-		handler: handler.NewLinkHandler(),
-	}
+	return &LinkUseCase{}
 }
 
 // Check - проверяет доступность ссылок и выводит результат
 func (l *LinkUseCase) Check(
 	filePath string,
-	httpClient *http.Client,
+	handler *handler.LinkHandler,
 	wp *worker.Pool[domain.Link],
 	prod *producer.Producer,
 	con *consumer.Consumer[domain.Link],
 ) {
-	l.handler.Client = httpClient
+	l.handler = handler
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
