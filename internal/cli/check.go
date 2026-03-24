@@ -45,6 +45,7 @@ func (c *CLI) checkCmd() *cobra.Command {
 	return cmd
 }
 
+// checkCmdInit - функция для инициализации команды check, которая создает контекст с поддержкой сигналов и вызывает метод Check у linkUseCase
 func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *string) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		var (
@@ -52,6 +53,9 @@ func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *st
 			dedup  producer.Deduplicator
 			rLimit limiter.RateLimiter
 		)
+
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
 
 		switch *outputType {
 		case redisOutputType:
@@ -61,6 +65,7 @@ func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *st
 		default:
 			out = output.NewConsoleOutput()
 			dedup = deduplicator.NewMemoryDeduplicator()
+			rLimit = limiter.NewMemoryRateLimiter()
 		}
 
 		httpClient := &http.Client{
@@ -71,9 +76,6 @@ func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *st
 				DisableKeepAlives:   false,
 			},
 		}
-
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		defer stop()
 
 		c.linkUseCase.Check(
 			ctx,

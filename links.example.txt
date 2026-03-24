@@ -33,7 +33,6 @@ https://www.adobe.com
 https://www.akamai.com
 https://www.aljazeera.com
 https://www.amazon.com
-https://www.amd.com
 https://www.anandtech.com
 https://www.ansible.com
 https://www.anu.edu.au
@@ -63,7 +62,6 @@ https://www.columbia.edu
 https://www.coursera.org
 https://www.crowdstrike.com
 https://www.dell.com
-https://www.devto.dev
 https://www.digitalocean.com
 https://www.docker.com
 https://www.dropbox.com
@@ -76,7 +74,6 @@ https://www.elastic.co
 https://www.engadget.com
 https://www.epfl.ch
 https://www.erlang.org
-https://www.eth.ch
 https://www.facebook.com
 https://www.fastly.com
 https://www.figma.com

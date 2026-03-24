@@ -41,6 +41,8 @@ func New(cfg *config.Config) *CLI {
 	})
 
 	c.root.AddCommand(c.checkCmd())
+	c.root.AddCommand(c.reportCmd())
+	c.root.AddCommand(c.clearCmd())
 
 	return c
 }
