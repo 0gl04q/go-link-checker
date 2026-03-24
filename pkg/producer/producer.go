@@ -2,7 +2,7 @@ package producer
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 )
 
 // Deduplicator - интерфейс для проверки, был ли URL уже обработан, и для очистки всех обработанных URL
@@ -27,22 +27,27 @@ func (p *Producer) Produce(ctx context.Context, urls []string, jobs chan<- strin
 		for _, url := range urls {
 			add, err := p.deduplicator.IsSeen(ctx, url)
 			if err != nil {
-				fmt.Printf("ошибка при дебаунсе ссылки %s: %v\n", url, err)
+				slog.Error("Ошибка при проверке ссылки", "url", url, "err", err)
 				continue
 			}
 			if !add {
-				fmt.Printf("ссылка %s уже была проверена, пропускаем\n", url)
+				slog.Info("Ссылка уже была проверена", "url", url)
 				continue
 			}
 
-			jobs <- url
+			select {
+			case <-ctx.Done():
+				return
+			case jobs <- url:
+			}
+
 		}
 
 		err := p.deduplicator.Clear(ctx)
 		if err != nil {
 			return
 		}
-		
+
 		close(jobs)
 	}()
 }

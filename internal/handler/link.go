@@ -2,7 +2,10 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
+	"math/rand"
 	"net/http"
 	urlpkg "net/url"
 	"time"
@@ -41,24 +44,28 @@ func (l *LinkHandler) processLink(ctx context.Context, link string) *domain.Link
 
 	res, err := l.sendGetRequest(ctx, link)
 	if err != nil {
+		slog.Error("Ошибка при отправке GET запроса", "url", link, "err", err)
 		return domain.NewLink(link, 0, "", timestamp, err)
 	}
 	if res == nil {
+		slog.Error("Пустой результат при отправке GET запроса", "url", link)
 		return domain.NewLink(link, 0, "", timestamp, ErrEmptyResult)
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode >= 200 && res.StatusCode < 400 {
+		slog.Debug("Ссылка доступна", "url", link, "status_code", res.StatusCode)
 		return domain.NewLink(link, res.StatusCode, "Ссылка доступна", timestamp, nil)
 	}
 
+	slog.Debug("Ссылка не доступна", "url", link, "status_code", res.StatusCode)
 	return domain.NewLink(link, res.StatusCode, "Ссылка не доступна", timestamp, nil)
 }
 
 // sendGetRequest - отправляет GET запрос по ссылке и возвращает результат
 func (l *LinkHandler) sendGetRequest(ctx context.Context, url string) (*http.Response, error) {
-	u, err := urlpkg.ParseRequestURI(url)
-	if err != nil {
+	u, parsErr := urlpkg.ParseRequestURI(url)
+	if parsErr != nil {
 		return nil, fmt.Errorf("%s ссылка не валидная\n", url)
 	}
 
@@ -86,8 +93,31 @@ func (l *LinkHandler) sendGetRequest(ctx context.Context, url string) (*http.Res
 	if err != nil {
 		return nil, err
 	}
-
 	r.Header.Set("User-Agent", "Mozilla/5.0 (compatible; LinkChecker/1.0)")
 
-	return l.Client.Do(r)
+	for i := 0; i < 3; i++ {
+		response, err := l.Client.Do(r)
+		if err == nil {
+			return response, nil
+		}
+
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return nil, fmt.Errorf("контекст истек при отправке запроса к %s: %v\n", url, err)
+		}
+
+		if i == 2 {
+			break
+		}
+
+		delay := 500 * time.Millisecond * time.Duration(1<<i)
+		jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("контекст истек при ожидании следующей попытки для %s: %v\n", url, ctx.Err())
+		case <-time.After(delay + jitter):
+		}
+	}
+
+	return nil, fmt.Errorf("не удалось получить ответ от %s после 3 попыток", url)
 }

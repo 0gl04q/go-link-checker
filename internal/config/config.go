@@ -11,7 +11,9 @@ type Config struct {
 }
 
 // CLIConfig - структура для хранения конфигурации командной строки (пока пустая, но может быть расширена в будущем)
-type CLIConfig struct{}
+type CLIConfig struct {
+	LogLevel string `env:"LOG_LEVEL" envDefault:"debug"`
+}
 
 // RedisConfig - структура для хранения конфигурации подключения к Redis
 type RedisConfig struct {

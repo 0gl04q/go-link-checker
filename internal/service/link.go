@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -26,6 +27,7 @@ func NewLinkUseCase() *LinkUseCase {
 
 // Check - проверяет доступность ссылок и выводит результат
 func (l *LinkUseCase) Check(
+	ctx context.Context,
 	filePath string,
 	handler *handler.LinkHandler,
 	wp *worker.Pool[domain.Link],
@@ -34,25 +36,33 @@ func (l *LinkUseCase) Check(
 ) {
 	l.handler = handler
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	urls, err := l.getLinksFromFile(filePath)
 	if err != nil {
-		fmt.Printf("ошибка при получении ссылок: %v\n", err)
+		slog.Error("Ошибка при получении ссылок", "err", err)
 		return
 	}
 
+	slog.Info("Получено ссылок для проверки", "count", len(urls))
+
 	results := wp.Start(ctx, l.handler.Handle)
+
+	slog.Info("Запустили воркеры")
 
 	prod.Produce(ctx, urls, wp.Jobs)
 
+	slog.Info("Запустили продюсера")
+
 	if errs := con.Consume(ctx, results); errs != nil {
-		fmt.Printf("ошибок при потреблении: %d\n", len(errs))
+		slog.Error("Ошибок при потреблении ресурсов")
 		for _, err := range errs {
-			fmt.Printf("  %v\n", err)
+			slog.Error("err", err)
 		}
 	}
+
+	slog.Info("Завершили проверку ссылок")
 }
 
 // getLinksFromFile - читает ссылки из файла и возвращает их в виде слайса строк

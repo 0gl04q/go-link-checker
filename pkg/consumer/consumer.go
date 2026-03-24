@@ -25,11 +25,17 @@ func NewConsumer[T any](output Output[T]) *Consumer[T] {
 func (c *Consumer[T]) Consume(ctx context.Context, results <-chan *T) []error {
 	var errs []error
 
-	for result := range results {
-		if err := c.output.Write(ctx, result); err != nil {
-			errs = append(errs, err)
+	for {
+		select {
+		case <-ctx.Done():
+			return errs
+		case result, ok := <-results:
+			if !ok {
+				return errs
+			}
+			if err := c.output.Write(ctx, result); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
-
-	return errs
 }

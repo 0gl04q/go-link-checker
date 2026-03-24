@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
 	"net/http"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/0gl04q/go-link-checker/internal/deduplicator"
@@ -44,9 +47,11 @@ func (c *CLI) checkCmd() *cobra.Command {
 
 func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *string) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		var out consumer.Output[domain.Link]
-		var dedup producer.Deduplicator
-		var rLimit limiter.RateLimiter
+		var (
+			out    consumer.Output[domain.Link]
+			dedup  producer.Deduplicator
+			rLimit limiter.RateLimiter
+		)
 
 		switch *outputType {
 		case redisOutputType:
@@ -67,7 +72,11 @@ func (c *CLI) checkCmdInit(filePath *string, workerPoolSize *int, outputType *st
 			},
 		}
 
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+
 		c.linkUseCase.Check(
+			ctx,
 			*filePath,
 			handler.NewLinkHandler(httpClient, rLimit),
 			worker.NewPool[domain.Link](*workerPoolSize),
